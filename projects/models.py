@@ -2,6 +2,13 @@ from django.db import models
 from users.models import User
 
 
+class Skill(models.Model):
+    name = models.CharField(max_length=124, unique=True)
+
+    def __str__(self):
+        return self.name
+
+
 class Project(models.Model):
     STATUS_CHOICES = [
         ('open', 'Открыт'),
@@ -15,6 +22,7 @@ class Project(models.Model):
     github_url = models.URLField(blank=True, null=True)
     status = models.CharField(max_length=6, choices=STATUS_CHOICES, default='open')
     participants = models.ManyToManyField(User, related_name='participated_projects', blank=True)
+    skills = models.ManyToManyField(Skill, related_name='projects', blank=True)
 
     def __str__(self):
         return self.name

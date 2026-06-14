@@ -10,4 +10,7 @@ urlpatterns = [
     path('<int:project_id>/toggle-participate/', views.toggle_participate, name='toggle_participate'),
     path('create-project/', views.create_project, name='create_project'),
     path('<int:project_id>/edit/', views.edit_project, name='edit_project'),
+    path('skills/', views.skill_autocomplete, name='skill_autocomplete'),
+    path('<int:project_id>/skills/add/', views.add_project_skill, name='add_project_skill'),
+    path('<int:project_id>/skills/<int:skill_id>/remove/', views.remove_project_skill, name='remove_project_skill'),
 ]
