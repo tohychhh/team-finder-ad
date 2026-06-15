@@ -1,45 +1,35 @@
 import json
-from django.shortcuts import render, redirect, get_object_or_404
+
 from django.contrib.auth.decorators import login_required
-from django.core.paginator import Paginator
 from django.http import JsonResponse
-from django import forms
-from .models import Project, Skill
-from users.models import User
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.views.decorators.http import require_http_methods
 
-
-class ProjectForm(forms.ModelForm):
-    class Meta:
-        model = Project
-        fields = ('name', 'description', 'github_url', 'status')
-        widgets = {
-            'status': forms.Select(choices=Project.STATUS_CHOICES),
-        }
-
-    def clean_github_url(self):
-        url = self.cleaned_data.get('github_url')
-        if url and 'github.com' not in url:
-            raise forms.ValidationError('Ссылка должна вести на GitHub')
-        return url
+from projects.forms import ProjectForm
+from projects.models import Project, Skill
+from projects.service import paginate_queryset
+from team_finder.constants import SKILL_AUTOCOMPLETE_LIMIT, STATUS_OPEN
 
 
 def project_list_view(request):
-    projects_list = Project.objects.filter(status='open').order_by('-created_at')
+    projects_list = Project.objects.filter(
+        status=STATUS_OPEN
+    ).select_related('owner').prefetch_related('participants', 'skills').order_by('-created_at')
+
     skill_filter = request.GET.get('skill')
     active_skill = None
-    
+
     if skill_filter:
         try:
             active_skill = Skill.objects.get(name=skill_filter)
             projects_list = projects_list.filter(skills=active_skill)
         except Skill.DoesNotExist:
             pass
-    
-    paginator = Paginator(projects_list, 12)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
+
+    page_obj = paginate_queryset(projects_list, request)
     all_skills = Skill.objects.all().order_by('name')
-    
+
     return render(request, 'projects/project_list.html', {
         'projects': page_obj,
         'all_skills': all_skills,
@@ -48,45 +38,52 @@ def project_list_view(request):
 
 
 def project_detail_view(request, project_id):
-    project = get_object_or_404(Project, id=project_id)
+    project = get_object_or_404(
+        Project.objects.select_related('owner').prefetch_related('participants', 'skills'),
+        id=project_id
+    )
     return render(request, 'projects/project-details.html', {'project': project})
 
 
 @login_required
+@require_http_methods(["POST"])
 def complete_project(request, project_id):
     project = get_object_or_404(Project, id=project_id)
     if project.owner != request.user:
         return JsonResponse({'error': 'Нет прав'}, status=403)
-    if project.status == 'open':
+
+    if project.status == STATUS_OPEN:
         project.status = 'closed'
         project.save()
+
     return JsonResponse({'status': 'ok', 'project_status': project.status})
 
 
 @login_required
+@require_http_methods(["POST"])
 def toggle_participate(request, project_id):
     project = get_object_or_404(Project, id=project_id)
-    if request.user in project.participants.all():
+    is_participant = project.participants.filter(id=request.user.id).exists()
+
+    if is_participant:
         project.participants.remove(request.user)
         is_participant = False
     else:
         project.participants.add(request.user)
         is_participant = True
+
     return JsonResponse({'status': 'ok', 'is_participant': is_participant})
 
 
 @login_required
 def create_project(request):
-    if request.method == 'POST':
-        form = ProjectForm(request.POST)
-        if form.is_valid():
-            project = form.save(commit=False)
-            project.owner = request.user
-            project.save()
-            project.participants.add(request.user)
-            return redirect(f'/projects/{project.id}/')
-    else:
-        form = ProjectForm()
+    form = ProjectForm(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        project = form.save(commit=False)
+        project.owner = request.user
+        project.save()
+        project.participants.add(request.user)
+        return redirect(reverse('projects:project_detail', args=[project.id]))
     return render(request, 'projects/create-project.html', {'form': form, 'is_edit': False})
 
 
@@ -94,46 +91,44 @@ def create_project(request):
 def edit_project(request, project_id):
     project = get_object_or_404(Project, id=project_id)
     if project.owner != request.user:
-        return redirect(f'/projects/{project_id}/')
-    
-    if request.method == 'POST':
-        form = ProjectForm(request.POST, instance=project)
-        if form.is_valid():
-            form.save()
-            return redirect(f'/projects/{project_id}/')
-    else:
-        form = ProjectForm(instance=project)
+        return redirect(reverse('projects:project_detail', args=[project_id]))
+
+    form = ProjectForm(request.POST or None, instance=project)
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        return redirect(reverse('projects:project_detail', args=[project_id]))
     return render(request, 'projects/create-project.html', {'form': form, 'is_edit': True, 'project': project})
 
 
 def skill_autocomplete(request):
     q = request.GET.get('q', '')
-    skills = Skill.objects.filter(name__istartswith=q).order_by('name')[:10]
+    skills = Skill.objects.filter(name__istartswith=q).order_by('name')[:SKILL_AUTOCOMPLETE_LIMIT]
     data = [{'id': s.id, 'name': s.name} for s in skills]
     return JsonResponse(data, safe=False)
 
 
 @login_required
+@require_http_methods(["POST"])
 def add_project_skill(request, project_id):
     project = get_object_or_404(Project, id=project_id)
     if project.owner != request.user:
         return JsonResponse({'error': 'Нет прав'}, status=403)
-    
+
     data = json.loads(request.body)
     skill_id = data.get('skill_id')
     skill_name = data.get('name')
     created = False
     added = False
-    
+
     if skill_id:
         skill = get_object_or_404(Skill, id=skill_id)
     else:
         skill, created = Skill.objects.get_or_create(name=skill_name)
-    
-    if skill not in project.skills.all():
+
+    if not project.skills.filter(id=skill.id).exists():
         project.skills.add(skill)
         added = True
-    
+
     return JsonResponse({
         'skill_id': skill.id,
         'created': created,
@@ -142,14 +137,15 @@ def add_project_skill(request, project_id):
 
 
 @login_required
+@require_http_methods(["POST"])
 def remove_project_skill(request, project_id, skill_id):
     project = get_object_or_404(Project, id=project_id)
     if project.owner != request.user:
         return JsonResponse({'error': 'Нет прав'}, status=403)
-    
+
     skill = get_object_or_404(Skill, id=skill_id)
-    
-    if skill in project.skills.all():
+
+    if project.skills.filter(id=skill.id).exists():
         project.skills.remove(skill)
-    
+
     return JsonResponse({'status': 'ok'})

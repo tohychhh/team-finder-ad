@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Вход{% endblock %}
+{% block title %}Вход в систему{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/auth.css' %}">
@@ -12,21 +12,14 @@
     <h2>Вход в систему</h2>
     <form method="post">
         {% csrf_token %}
-
-        {{ form.non_field_errors }}
-
-        <div class="form-field">
-            {{ form.email.label_tag }}
-            {{ form.email }}
-            {{ form.email.errors }}
+        <div>
+            <label>Email:</label>
+            <input type="email" name="username" placeholder="ivan@example.com" required>
         </div>
-
-        <div class="form-field">
-            {{ form.password.label_tag }}
-            {{ form.password }}
-            {{ form.password.errors }}
+        <div>
+            <label>Пароль:</label>
+            <input type="password" name="password" required>
         </div>
-
         <button type="submit">Войти</button>
     </form>
     <p class="auth-link">Нет аккаунта? <a href="{% url 'users:register' %}">Зарегистрироваться</a></p>
