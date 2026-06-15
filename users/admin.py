@@ -16,6 +16,7 @@ class UserAdmin(BaseUserAdmin):
     form = CustomUserChangeForm
     list_display = ('email', 'name', 'surname', 'phone', 'is_staff')
     search_fields = ('email', 'name', 'surname')
+    ordering = ('email',)
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
         ('Personal info', {'fields': ('name', 'surname', 'phone', 'avatar', 'github_url', 'about')}),
