@@ -15,3 +15,4 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
         return self.create_user(email, name, surname, phone, password, **extra_fields)
+    

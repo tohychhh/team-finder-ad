@@ -1,4 +1,5 @@
 from django.urls import path
+
 from projects import views
 
 app_name = 'projects'
@@ -13,4 +14,5 @@ urlpatterns = [
     path('skills/', views.skill_autocomplete, name='skill_autocomplete'),
     path('<int:project_id>/skills/add/', views.add_project_skill, name='add_project_skill'),
     path('<int:project_id>/skills/<int:skill_id>/remove/', views.remove_project_skill, name='remove_project_skill'),
+    path('favorites/', views.favorites_view, name='favorites'),
 ]

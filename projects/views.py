@@ -1,15 +1,15 @@
 import json
 
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
 from projects.forms import ProjectForm
 from projects.models import Project, Skill
 from projects.service import paginate_queryset
-from team_finder.constants import SKILL_AUTOCOMPLETE_LIMIT, STATUS_OPEN
+from team_finder.constants import PAGINATION_PAGE_SIZE, SKILL_AUTOCOMPLETE_LIMIT, STATUS_OPEN
 
 
 def project_list_view(request):
@@ -67,23 +67,21 @@ def toggle_participate(request, project_id):
 
     if is_participant:
         project.participants.remove(request.user)
-        is_participant = False
     else:
         project.participants.add(request.user)
-        is_participant = True
 
-    return JsonResponse({'status': 'ok', 'is_participant': is_participant})
+    return JsonResponse({'status': 'ok', 'is_participant': not is_participant})
 
 
 @login_required
 def create_project(request):
     form = ProjectForm(request.POST or None)
-    if request.method == 'POST' and form.is_valid():
+    if form.is_valid():
         project = form.save(commit=False)
         project.owner = request.user
         project.save()
         project.participants.add(request.user)
-        return redirect(reverse('projects:project_detail', args=[project.id]))
+        return redirect('projects:project_detail', project.id)
     return render(request, 'projects/create-project.html', {'form': form, 'is_edit': False})
 
 
@@ -91,12 +89,12 @@ def create_project(request):
 def edit_project(request, project_id):
     project = get_object_or_404(Project, id=project_id)
     if project.owner != request.user:
-        return redirect(reverse('projects:project_detail', args=[project_id]))
+        return redirect('projects:project_detail', project_id)
 
     form = ProjectForm(request.POST or None, instance=project)
-    if request.method == 'POST' and form.is_valid():
+    if form.is_valid():
         form.save()
-        return redirect(reverse('projects:project_detail', args=[project_id]))
+        return redirect('projects:project_detail', project_id)
     return render(request, 'projects/create-project.html', {'form': form, 'is_edit': True, 'project': project})
 
 
@@ -149,3 +147,13 @@ def remove_project_skill(request, project_id, skill_id):
         project.skills.remove(skill)
 
     return JsonResponse({'status': 'ok'})
+
+
+@login_required
+def favorites_view(request):
+    user = request.user
+    favorite_projects = user.favorites.all()
+    paginator = Paginator(favorite_projects, PAGINATION_PAGE_SIZE)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    return render(request, 'projects/favorite_projects.html', {'projects': page_obj})

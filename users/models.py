@@ -4,12 +4,20 @@ from io import BytesIO
 
 from PIL import Image, ImageDraw, ImageFont
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
+from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.db import models
 
-from team_finder.constants import (AVATAR_COLORS, MAX_LENGTH_ABOUT,
-                                   MAX_LENGTH_NAME, MAX_LENGTH_PHONE,
-                                   MAX_LENGTH_SURNAME)
+from team_finder.constants import (
+    AVATAR_COLORS,
+    AVATAR_SIZE,
+    AVATAR_TEXT_COLOR,
+    FONT_SIZE,
+    MAX_LENGTH_ABOUT,
+    MAX_LENGTH_NAME,
+    MAX_LENGTH_PHONE,
+    MAX_LENGTH_SURNAME,
+)
 from users.managers import UserManager
 
 
@@ -24,6 +32,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     date_joined = models.DateTimeField(auto_now_add=True)
+    favorites = models.ManyToManyField('projects.Project', related_name='favorited_by', blank=True)
 
     objects = UserManager()
 
@@ -42,22 +51,27 @@ class User(AbstractBaseUser, PermissionsMixin):
         color = random.choice(AVATAR_COLORS)
         first_letter = self.name[0].upper() if self.name else '?'
 
-        img = Image.new('RGB', (200, 200), color=color)
+        img = Image.new('RGB', (AVATAR_SIZE, AVATAR_SIZE), color=color)
         draw = ImageDraw.Draw(img)
 
         try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 100)
+            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", FONT_SIZE)
         except:
             font = ImageFont.load_default()
 
         bbox = draw.textbbox((0, 0), first_letter, font=font)
         text_width = bbox[2] - bbox[0]
         text_height = bbox[3] - bbox[1]
-        x = (200 - text_width) / 2
-        y = (200 - text_height) / 2
-        draw.text((x, y), first_letter, fill='white', font=font)
+        x = (AVATAR_SIZE - text_width) / 2
+        y = (AVATAR_SIZE - text_height) / 2
+        draw.text((x, y), first_letter, fill=AVATAR_TEXT_COLOR, font=font)
 
         buffer = BytesIO()
         img.save(buffer, format='PNG')
         filename = f'avatar_{uuid.uuid4()}.png'
         return ContentFile(buffer.getvalue(), filename)
+
+    def clean(self):
+        super().clean()
+        if self.github_url and 'github.com' not in self.github_url:
+            raise ValidationError({'github_url': 'Ссылка должна вести на GitHub'})
