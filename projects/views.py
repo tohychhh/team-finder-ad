@@ -1,4 +1,5 @@
 import json
+from http import HTTPStatus
 
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
@@ -9,7 +10,12 @@ from django.views.decorators.http import require_http_methods
 from projects.forms import ProjectForm
 from projects.models import Project, Skill
 from projects.service import paginate_queryset
-from team_finder.constants import PAGINATION_PAGE_SIZE, SKILL_AUTOCOMPLETE_LIMIT, STATUS_OPEN
+from team_finder.constants import (
+    PAGINATION_PAGE_SIZE,
+    SKILL_AUTOCOMPLETE_LIMIT,
+    STATUS_CLOSED,
+    STATUS_OPEN,
+)
 
 
 def project_list_view(request):
@@ -50,10 +56,10 @@ def project_detail_view(request, project_id):
 def complete_project(request, project_id):
     project = get_object_or_404(Project, id=project_id)
     if project.owner != request.user:
-        return JsonResponse({'error': 'Нет прав'}, status=403)
+        return JsonResponse({'error': 'Нет прав'}, status=HTTPStatus.FORBIDDEN)
 
     if project.status == STATUS_OPEN:
-        project.status = 'closed'
+        project.status = STATUS_CLOSED
         project.save()
 
     return JsonResponse({'status': 'ok', 'project_status': project.status})
@@ -110,7 +116,7 @@ def skill_autocomplete(request):
 def add_project_skill(request, project_id):
     project = get_object_or_404(Project, id=project_id)
     if project.owner != request.user:
-        return JsonResponse({'error': 'Нет прав'}, status=403)
+        return JsonResponse({'error': 'Нет прав'}, status=HTTPStatus.FORBIDDEN)
 
     data = json.loads(request.body)
     skill_id = data.get('skill_id')
@@ -139,7 +145,7 @@ def add_project_skill(request, project_id):
 def remove_project_skill(request, project_id, skill_id):
     project = get_object_or_404(Project, id=project_id)
     if project.owner != request.user:
-        return JsonResponse({'error': 'Нет прав'}, status=403)
+        return JsonResponse({'error': 'Нет прав'}, status=HTTPStatus.FORBIDDEN)
 
     skill = get_object_or_404(Skill, id=skill_id)
 
@@ -153,7 +159,5 @@ def remove_project_skill(request, project_id, skill_id):
 def favorites_view(request):
     user = request.user
     favorite_projects = user.favorites.all()
-    paginator = Paginator(favorite_projects, PAGINATION_PAGE_SIZE)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
+    page_obj = paginate_queryset(favorite_projects, request, PAGINATION_PAGE_SIZE)
     return render(request, 'projects/favorite_projects.html', {'projects': page_obj})

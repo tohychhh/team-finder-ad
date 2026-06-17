@@ -53,40 +53,20 @@ def user_detail_view(request, user_id):
 
 
 @login_required
-def edit_profile_view(request, user_id):
-    if request.user.id != user_id:
-        return redirect('users:user_detail', user_id=request.user.id)
-    user_obj = get_object_or_404(User, id=user_id)
-    if request.method == 'POST':
-        form = ProfileEditForm(request.POST, request.FILES, instance=user_obj)
-        if form.is_valid():
-            form.save()
-            return redirect('users:user_detail', user_id=user_id)
-    else:
-        form = ProfileEditForm(instance=user_obj)
+def edit_profile_view(request):
+    user_obj = request.user
+    form = ProfileEditForm(request.POST or None, request.FILES or None, instance=user_obj)
+    if form.is_valid():
+        form.save()
+        return redirect('users:user_detail', user_id=user_obj.id)
     return render(request, 'users/edit_profile.html', {'form': form, 'user_obj': user_obj})
 
 
 @login_required
-def change_password_view(request, user_id):
-    if request.user.id != user_id:
+def change_password_view(request):
+    form = PasswordChangeForm(request.user, request.POST or None)
+    if form.is_valid():
+        user = form.save()
+        update_session_auth_hash(request, user)
         return redirect('users:user_detail', user_id=request.user.id)
-    if request.method == 'POST':
-        form = PasswordChangeForm(request.user, request.POST)
-        if form.is_valid():
-            user = form.save()
-            update_session_auth_hash(request, user)
-            return redirect('users:user_detail', user_id=user_id)
-    else:
-        form = PasswordChangeForm(request.user)
     return render(request, 'users/change_password.html', {'form': form})
-
-
-@login_required
-def redirect_to_change_password(request):
-    return redirect('users:change_password', user_id=request.user.id)
-
-
-@login_required
-def redirect_to_edit_profile(request):
-    return redirect('users:edit_profile', user_id=request.user.id)

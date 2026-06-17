@@ -56,7 +56,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 
         try:
             font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", FONT_SIZE)
-        except:
+        except Exception:
             font = ImageFont.load_default()
 
         bbox = draw.textbbox((0, 0), first_letter, font=font)
